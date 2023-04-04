@@ -5,12 +5,13 @@ addon.desc      = 'Sends information to a centralized server so it can be aggreg
 addon.link      = 'https://horizonxi-tracker.com/';
 
 require('common');
-local chat = require('chat');
-local http = require('socket.http');
-local json = require('json');
-local ltn12 = require('socket.ltn12');
-local os = require('os');
-local settings = require('settings');
+local chat      = require('chat');
+local http      = require('socket.http');
+local json      = require('json');
+local ltn12     = require('socket.ltn12');
+local os        = require('os');
+local settings  = require('settings');
+local xData     = require('data');
 
 -- Default settings
 local defaultSettings = {
@@ -21,9 +22,9 @@ local defaultSettings = {
 local xit = T{
     zoneId = 0,
     urls = {
-        login = "http://laravel.local/api/login",
-        logout = "http://laravel.local/api/logout",
-        mobkills = "http://laravel.local/api/mobkills",
+        login       = "http://laravel.local/api/login",
+        logout      = "http://laravel.local/api/logout",
+        mobkills    = "http://laravel.local/api/mobkills",
     },
     settings = settings.load(defaultSettings),
 };
@@ -120,6 +121,41 @@ local function attemptLogout()
 end
 
 --[[
+* Submits a request to the data service
+*
+* @param {string} body - The body of the request in JSON form
+* @param {string} url - The url of where to send the request
+* @param {string} method - The method to send the request as
+* @param {table} headers - The request headers as a table
+--]]
+local function submitRequest(body, url, method, headers)
+
+    -- Process the request
+    local reqBody = body;
+    local respBody = {};
+    local reqBody, reqCode, reqheaders, reqStatus = http.request {
+        url = url,
+        method = method,
+        headers = headers,
+        source = ltn12.source.string(reqBody),
+        sink = ltn12.sink.table(respBody),
+    };
+
+    -- Process the response
+    if (reqCode == 201) then
+
+        -- Login succeeded
+        print(chat.header(addon.name):append(chat.message('Kill information submitted!')));
+
+    else
+        -- Login failed
+        print(chat.header(addon.name):append(chat.error('Error: ')):append(chat.message('Kill information could not be submitted.')));
+
+    end
+
+end
+
+--[[
 * event: load
 * desc : Event called when the addon is being loaded.
 --]]
@@ -190,11 +226,12 @@ ashita.events.register('packet_in', 'packet_in_cb', function (e)
     -- 5.) A mob that died nearby from an unknown cause
 
     -- Grab some basic info from memory
-    local memEntity = AshitaCore:GetMemoryManager():GetEntity()
-    local memParty = AshitaCore:GetMemoryManager():GetParty()
-    local memPlayer = AshitaCore:GetMemoryManager():GetPlayer()
-    local memPlayerIndex = memParty:GetMemberIndex(0)
-    local memTargetIndex = memParty:GetMemberTargetIndex(0)
+    local memEntity = AshitaCore:GetMemoryManager():GetEntity();
+    local memParty = AshitaCore:GetMemoryManager():GetParty();
+    local memPlayer = AshitaCore:GetMemoryManager():GetPlayer();
+    local memPlayerIndex = memParty:GetMemberIndex(0);
+    local memTargetIndex = memParty:GetMemberTargetIndex(0);
+    local environment = xData.GetEnvironment();
 
     -- Packet: Zone Enter / Zone Leave
     if (e.id == 0x000A) then
@@ -243,7 +280,7 @@ ashita.events.register('packet_in', 'packet_in_cb', function (e)
             if (memParty:GetMemberServerId(0) == messagePlayer.ServerId) then
 
                 -- Prepare the request data
-                local reqData = {
+                local reqData = json.encode({
                     ['player_id'] = messagePlayer.ServerId,
                     ['player_name'] = messagePlayer.Name,
                     ['player_job_id'] = memParty:GetMemberMainJob(0),
@@ -252,41 +289,30 @@ ashita.events.register('packet_in', 'packet_in_cb', function (e)
                     ['player_subjob_level'] = memParty:GetMemberSubJobLevel(0),
                     ['mob_id'] = messageMob.ServerId,
                     ['mob_name'] = messageMob.Name,
-                    ['mob_level'] = 0,
-                    ['zone_id'] = xit.settings.zoneId,
+                    ['zone_name'] = environment.Area,
+                    ['van_time_of_day'] = environment.Time,
+                    ['van_day_of_week'] = environment.Day,
+                    ['van_weather'] = environment.Weather,
+                    ['moon_phase'] = environment.MoonPhase,
                     ['position_x'] = memEntity:GetLocalPositionX(amActorIndex),
                     ['position_y'] = memEntity:GetLocalPositionY(amActorIndex),
                     ['position_z'] = memEntity:GetLocalPositionZ(amActorIndex),
+                });
+
+                -- Construct the reqeust headers
+                local headers = {
+                    ["Accept"] = "application/json",
+                    ["Authorization"] = "Bearer " .. xit.settings.token,
+                    ["Content-Type"] = "application/json",
+                    ["Content-Length"] = string.len(reqData),
                 };
+
+                -- Submit the data asynchronously
+                local request = coroutine.create(function (data, url, method, headers)
+                    return submitRequest(data, url, method, headers);
+                end);
+                coroutine.resume(request, reqData, xit.urls.mobkills, "post", headers);
                 
-                -- Process the request
-                local reqBody = json.encode(reqData);
-                local respBody = {};
-                local reqBody, reqCode, reqHeaders, reqStatus = http.request {
-                    url = xit.urls.mobkills,
-                    method = "POST",
-                    headers = {
-                        ["Accept"] = "application/json",
-                        ["Authorization"] = "Bearer " .. xit.settings.token,
-                        ["Content-Type"] = "application/json",
-                        ["Content-Length"] = string.len(reqBody),
-                    },
-                    source = ltn12.source.string(reqBody),
-                    sink = ltn12.sink.table(respBody),
-                }
-
-                -- Process the response
-                if (reqCode == 201) then
-
-                    -- Login succeeded
-                    print(chat.header(addon.name):append(chat.message('Kill information submitted!')));
-
-                else
-                    -- Login failed
-                    print(chat.header(addon.name):append(chat.error('Error: ')):append(chat.message('Kill information could not be submitted.')));
-
-                end
-
             -- Someone killed a mob nearby (Not yet implemented)
             else
 
