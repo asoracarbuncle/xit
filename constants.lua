@@ -1,5 +1,6 @@
 local constants = {};
 
+-- Designed to be used with ResolveString
 constants.WeekDay = T{
     [1] = 'Firesday',
     [2] = 'Earthsday',
@@ -259,6 +260,31 @@ constants.MoonPhase = T{
     [82] = 'Full Moon',
     [83] = 'Full Moon',
     [84] = 'Full Moon'
+};
+
+-- Not designed to be used with ResolveString
+constants.Jobs = T{
+    ['Bard'] = 'BRD',
+    ['Beastmaster'] = 'BST',
+    ['Black Mage'] = 'BLM',
+    ['Blue Mage'] = 'BLU',
+    ['Corsair'] = 'COR',
+    ['Dancer'] = 'DNC',
+    ['Dark Knight'] = 'DRK',
+    ['Dragoon'] = 'DRG',
+    ['Geomancer'] = 'GEO',
+    ['Monk'] = 'MNK',
+    ['Ninja'] = 'NIN',
+    ['Paladin'] = 'PLD',
+    ['Puppetmaster'] = 'PUP',
+    ['Red Mage'] = 'RDM',
+    ['Rune Fencer'] = 'RUN',
+    ['Samurai'] = 'SAM',
+    ['Scholar'] = 'SCH',
+    ['Summoner'] = 'SMN',
+    ['Thief'] = 'THF',
+    ['Warrior'] = 'WAR',
+    ['White Mage'] = 'WHM',
 };
 
 return constants;
